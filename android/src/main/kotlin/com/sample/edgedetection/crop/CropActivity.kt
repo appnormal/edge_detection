@@ -2,11 +2,13 @@ package com.sample.edgedetection.crop
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ImageView
-import androidx.appcompat.view.menu.MenuBuilder
+import com.sample.edgedetection.OPTION_COLOR
+import com.sample.edgedetection.OPTION_STRINGS
 import com.sample.edgedetection.R
 import com.sample.edgedetection.SCANNED_RESULT
 import com.sample.edgedetection.base.BaseActivity
@@ -16,7 +18,6 @@ import kotlinx.android.synthetic.main.activity_crop.*
 
 class CropActivity : BaseActivity(), ICropView.Proxy {
 
-    private var showMenuItems = false
 
     private lateinit var mPresenter: CropPresenter
 
@@ -27,6 +28,18 @@ class CropActivity : BaseActivity(), ICropView.Proxy {
 
 
     override fun initPresenter() {
+
+        val strings = (intent?.extras?.getSerializable(OPTION_STRINGS)
+                ?: hashMapOf<String, String>()) as HashMap<*, *>
+
+        strings["cropping"]?.let { title = it as String }
+
+        intent?.extras?.getLong(OPTION_COLOR)?.let {
+            supportActionBar?.setBackgroundDrawable(ColorDrawable(it.toInt()))
+            window.statusBarColor = it.toInt()
+        }
+
+
         mPresenter = CropPresenter(this, this)
     }
 
@@ -39,91 +52,39 @@ class CropActivity : BaseActivity(), ICropView.Proxy {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.crop_activity_menu, menu)
 
-        menu.setGroupVisible(R.id.enhance_group, showMenuItems)
+        menu.findItem(R.id.action_label)?.let {
+            it.title = applicationContext.getString(R.string.done)
+            it.icon = applicationContext.getDrawable(R.drawable.ic_done)
+        }
 
-        menu.findItem(R.id.rotation_image).setVisible(showMenuItems)
-
-        if(showMenuItems) {
-            menu.findItem(R.id.action_label)
-                    .setTitle(applicationContext.getString(R.string.done))
-                    .setIcon(applicationContext.getDrawable(R.drawable.ic_done))
+        val strings = (intent?.extras?.getSerializable(OPTION_STRINGS)
+                ?: hashMapOf<String, String>()) as HashMap<*, *>
+        strings["done"]?.let {
+            menu.findItem(R.id.action_label).setTitle(it as String)
         }
 
         return super.onCreateOptionsMenu(menu)
     }
 
 
-    fun changeMenuVisibility(showMenuItems:Boolean){
-        this.showMenuItems = showMenuItems
-        invalidateOptionsMenu()
-    }
-
     // handle button activities
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
 
-        if(item.itemId == android.R.id.home){
+        if (item.itemId == android.R.id.home) {
             onBackPressed()
             return true
         }
 
         if (item.itemId == R.id.action_label) {
-            Log.e(TAG, item.title.toString());
-            if(item.title == applicationContext.getString(R.string.crop)){
+            Log.e(classTag, "Saved touched!")
 
-                Log.e(TAG, "Crop touched!");
+            mPresenter.cropAndSave {
+                Log.e(classTag, "Saved touched! $it")
 
-                /* Temp
-                Log.e(TAG, applicationContext.getString(R.string.done));
-                item.setTitle(applicationContext.getString(R.string.done))
-                item.setIcon(applicationContext.getDrawable(R.drawable.ic_done))
-                */
-
-                mPresenter.crop()
-                changeMenuVisibility(true);
-
-                return true
-            }
-
-//            if(item.title == applicationContext.getString(R.string.done)) {
-//                var path = mPresenter.save()
-//                setResult(Activity.RESULT_OK, Intent().putExtra(SCANNED_RESULT, path))
-//                System.gc()
-//                finish()
-//                return true
-//            }
-
-            if(item.title == applicationContext.getString(R.string.done)){
-
-                Log.e(TAG, "Saved touched!");
-
-                var path = mPresenter.save()
-
-                Log.e(TAG, "Saved touched! $path");
-
-                setResult(Activity.RESULT_OK, Intent().putExtra(SCANNED_RESULT, path))
-                System.gc()
+                setResult(Activity.RESULT_OK, Intent().putExtra(SCANNED_RESULT, it))
+                mPresenter.dispose()
                 finish()
-
-                return true
             }
-        }
-
-        if(item.title == applicationContext.getString(R.string.rotate)){
-            Log.e(TAG, "Rotate touched!");
-            mPresenter.rotate()
-            return true
-        }
-
-
-        if(item.title == applicationContext.getString(R.string.black)){
-            Log.e(TAG, "Black White touched!");
-            mPresenter.enhance()
-            return true
-        }
-
-        if(item.title == applicationContext.getString(R.string.reset)){
-            Log.e(TAG, "Reset touched!");
-            mPresenter.reset()
             return true
         }
 

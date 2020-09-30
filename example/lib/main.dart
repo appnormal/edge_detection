@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:edge_detection/edge_detection.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() => runApp(new MyApp());
 
@@ -12,33 +13,34 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _imagePath = 'Unknown';
-
-  @override
-  void initState() {
-    super.initState();
-  }
+  String _error;
+  String _imagePath;
 
   // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
-    String imagePath;
+  Future<void> getImageFromPlugin() async {
+    String imagePath, error;
+
     // Platform messages may fail, so we use a try/catch PlatformException.
     try {
-      imagePath = await EdgeDetection.detectEdge;
-      if (imagePath != null) {
-        print("$imagePath");
-      }
+      imagePath = await EdgeDetection.edgeDetection(Options(
+        strings: {
+          "done": "Klaar",
+          "cancel": "Annuleer",
+          "scanning": "Maak een foto",
+          "cropping": "Bijsnijden",
+          "crop": "Opslaan"
+        },
+        primaryColor: Colors.amber,
+      ));
     } on PlatformException {
-      imagePath = 'Failed to get cropped image path.';
+      error = 'Failed to get cropped image path.';
     }
 
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, we want to discard the reply rather than calling
-    // setState to update our non-existent appearance.
     if (!mounted) return;
 
     setState(() {
       _imagePath = imagePath;
+      _error = error;
     });
   }
 
@@ -55,19 +57,26 @@ class _MyAppState extends State<MyApp> {
           children: [
             Center(
               child: RaisedButton(
-                onPressed: initPlatformState,
-                child: Text('Scan'),
+                onPressed: getImageFromPlugin,
+                child: Text('Get image'),
               ),
             ),
+
             SizedBox(height: 20),
-            Text('Cropped image path:'),
-            Padding(
-              padding: const EdgeInsets.only(top: 0, left: 0, right: 0),
-              child: Text(
-                '$_imagePath\n',
-                style: TextStyle(fontSize: 10),
+
+            /// Image
+            if (_imagePath != null)
+              Center(
+                child: SizedBox.fromSize(
+                  size: Size(400, 400),
+                  child: Image.file(
+                    File(_imagePath),
+                  ),
+                ),
               ),
-            ),
+
+            /// Error
+            if (_error != null) Center(child: Text(_error)),
           ],
         ),
       ),

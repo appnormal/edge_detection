@@ -11,7 +11,7 @@ class EdgeDetectionPlugin(private val registrar: Registrar, private val delegate
 
   companion object {
     @JvmStatic
-    fun registerWith(registrar: Registrar): Unit {
+    fun registerWith(registrar: Registrar) {
       if (registrar.activity() != null) {
         val channel = MethodChannel(registrar.messenger(), "edge_detection")
 
@@ -24,15 +24,18 @@ class EdgeDetectionPlugin(private val registrar: Registrar, private val delegate
     }
   }
 
-  override fun onMethodCall(call: MethodCall, result: Result): Unit {
-    if (registrar.activity() == null) {
-      result.error("no_activity", "edge_detection plugin requires a foreground activity.", null)
-      return
-    }
-    else if (call.method.equals("edge_detect")) {
-      delegate.OpenCameraActivity(call, result)
-    }else {
-      result.notImplemented()
+  override fun onMethodCall(call: MethodCall, result: Result) {
+    when {
+        registrar.activity() == null -> {
+          result.error("no_activity", "edge_detection plugin requires a foreground activity.", null)
+          return
+        }
+        call.method == "edge_detect" -> {
+          delegate.openCameraActivity(call, result)
+        }
+        else -> {
+          result.notImplemented()
+        }
     }
   }
 }

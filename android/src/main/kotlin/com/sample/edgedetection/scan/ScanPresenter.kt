@@ -10,12 +10,11 @@ import android.graphics.Rect
 import android.graphics.YuvImage
 import android.hardware.Camera
 import android.hardware.Camera.ShutterCallback
-import android.media.AudioManager
 import android.media.MediaPlayer
+import android.os.Bundle
 import android.util.Log
 import android.view.SurfaceHolder
 import android.widget.Toast
-import androidx.core.content.ContextCompat.getSystemService
 import com.sample.edgedetection.R
 import com.sample.edgedetection.REQUEST_CODE
 import com.sample.edgedetection.SourceManager
@@ -39,7 +38,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 
-class ScanPresenter constructor(private val context: Context, private val iView: IScanView.Proxy)
+class ScanPresenter constructor(private val context: Context, private val iView: IScanView.Proxy, private val bundleExtras: Bundle?)
     : SurfaceHolder.Callback, Camera.PictureCallback, Camera.PreviewCallback {
     private val TAG: String = "ScanPresenter"
     private var mCamera: Camera? = null
@@ -72,7 +71,6 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                 soundSilence.start()
             }, null, this)
             mCamera?.enableShutterSound(false)
-            //MediaActionSound().play(MediaActionSound.SHUTTER_CLICK)
         }
     }
 
@@ -176,7 +174,10 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                     SourceManager.corners = processPicture(pic)
                     Imgproc.cvtColor(pic, pic, Imgproc.COLOR_RGB2BGRA)
                     SourceManager.pic = pic
-                    (context as Activity)?.startActivityForResult(Intent(context, CropActivity::class.java),REQUEST_CODE)
+                    val intent = Intent(context, CropActivity::class.java).apply {
+                        putExtras(bundleExtras)
+                    }
+                    (context as Activity)?.startActivityForResult(intent,REQUEST_CODE)
                     busy = false
                 }
     }

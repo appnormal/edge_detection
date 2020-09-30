@@ -7,9 +7,11 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 
-class EdgeDetectionDelegate(activity: Activity) : PluginRegistry.ActivityResultListener {
+const val OPTION_STRINGS = "strings"
+const val OPTION_COLOR = "color"
 
-    private var activity: Activity = activity
+class EdgeDetectionDelegate(private var activity: Activity) : PluginRegistry.ActivityResultListener {
+
     private var result: MethodChannel.Result? = null
     private var methodCall: MethodCall? = null
 
@@ -25,21 +27,27 @@ class EdgeDetectionDelegate(activity: Activity) : PluginRegistry.ActivityResultL
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 finishWithSuccess(null)
             }
-            return true;
+            return true
         }
 
-        return false;
+        return false
     }
 
-    fun OpenCameraActivity(call: MethodCall, result: MethodChannel.Result) {
+    fun openCameraActivity(call: MethodCall, result: MethodChannel.Result) {
 
         if (!setPendingMethodCallAndResult(call, result)) {
             finishWithAlreadyActiveError()
             return
         }
+        val strings = call.argument<HashMap<String, String>>(OPTION_STRINGS) ?: hashMapOf()
+        val color = call.argument<Long>(OPTION_COLOR) ?: 0L
 
-        var intent = Intent(Intent(activity.applicationContext, ScanActivity::class.java))
-        activity.startActivityForResult(intent,REQUEST_CODE)
+        val intent = Intent(Intent(activity.applicationContext, ScanActivity::class.java)).apply {
+            putExtra(OPTION_STRINGS, strings)
+            putExtra(OPTION_COLOR, color)
+        }
+
+        activity.startActivityForResult(intent, REQUEST_CODE)
     }
 
     private fun setPendingMethodCallAndResult(methodCall: MethodCall, result: MethodChannel.Result): Boolean {
@@ -53,11 +61,7 @@ class EdgeDetectionDelegate(activity: Activity) : PluginRegistry.ActivityResultL
     }
 
     private fun finishWithAlreadyActiveError() {
-        finishWithError("already_active", "Edge detection is already active")
-    }
-
-    private fun finishWithError(errorCode: String, errorMessage: String) {
-        result?.error(errorCode, errorMessage, null)
+        result?.error("already_active", "Edge detection is already active", null)
         clearMethodCallAndResult()
     }
 

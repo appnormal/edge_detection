@@ -1,10 +1,10 @@
 package com.sample.edgedetection.processor
 
-import android.graphics.Bitmap
 import android.util.Log
-import org.opencv.android.Utils
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 const val TAG: String = "PaperProcessor"
 
@@ -15,53 +15,43 @@ fun processPicture(previewFrame: Mat): Corners? {
 
 fun cropPicture(picture: Mat, pts: List<Point>): Mat {
 
-    pts.forEach { Log.i(TAG, "point: " + it.toString()) }
+    pts.forEach { Log.i(TAG, "point: $it") }
     val tl = pts[0]
     val tr = pts[1]
     val br = pts[2]
     val bl = pts[3]
 
-    val widthA = Math.sqrt(Math.pow(br.x - bl.x, 2.0) + Math.pow(br.y - bl.y, 2.0))
-    val widthB = Math.sqrt(Math.pow(tr.x - tl.x, 2.0) + Math.pow(tr.y - tl.y, 2.0))
+    val widthA = sqrt((br.x - bl.x).pow(2.0) + (br.y - bl.y).pow(2.0))
+    val widthB = sqrt((tr.x - tl.x).pow(2.0) + (tr.y - tl.y).pow(2.0))
 
-    val dw = Math.max(widthA, widthB)
-    val maxWidth = java.lang.Double.valueOf(dw)!!.toInt()
+    val dw = widthA.coerceAtLeast(widthB)
+    val maxWidth = java.lang.Double.valueOf(dw).toInt()
 
 
-    val heightA = Math.sqrt(Math.pow(tr.x - br.x, 2.0) + Math.pow(tr.y - br.y, 2.0))
-    val heightB = Math.sqrt(Math.pow(tl.x - bl.x, 2.0) + Math.pow(tl.y - bl.y, 2.0))
+    val heightA = sqrt((tr.x - br.x).pow(2.0) + (tr.y - br.y).pow(2.0))
+    val heightB = sqrt((tl.x - bl.x).pow(2.0) + (tl.y - bl.y).pow(2.0))
 
-    val dh = Math.max(heightA, heightB)
-    val maxHeight = java.lang.Double.valueOf(dh)!!.toInt()
+    val dh = heightA.coerceAtLeast(heightB)
+    val maxHeight = java.lang.Double.valueOf(dh).toInt()
 
     val croppedPic = Mat(maxHeight, maxWidth, CvType.CV_8UC4)
 
-    val src_mat = Mat(4, 1, CvType.CV_32FC2)
-    val dst_mat = Mat(4, 1, CvType.CV_32FC2)
+    val srcMat = Mat(4, 1, CvType.CV_32FC2)
+    val dstMat = Mat(4, 1, CvType.CV_32FC2)
 
-    src_mat.put(0, 0, tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y)
-    dst_mat.put(0, 0, 0.0, 0.0, dw, 0.0, dw, dh, 0.0, dh)
+    srcMat.put(0, 0, tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y)
+    dstMat.put(0, 0, 0.0, 0.0, dw, 0.0, dw, dh, 0.0, dh)
 
-    val m = Imgproc.getPerspectiveTransform(src_mat, dst_mat)
+    val m = Imgproc.getPerspectiveTransform(srcMat, dstMat)
 
     Imgproc.warpPerspective(picture, croppedPic, m, croppedPic.size())
     m.release()
-    src_mat.release()
-    dst_mat.release()
+    srcMat.release()
+    dstMat.release()
     Log.i(TAG, "crop finish")
     return croppedPic
 }
 
-fun enhancePicture(src: Bitmap?): Bitmap {
-    val src_mat = Mat()
-    Utils.bitmapToMat(src, src_mat)
-    Imgproc.cvtColor(src_mat, src_mat, Imgproc.COLOR_RGBA2GRAY)
-    Imgproc.adaptiveThreshold(src_mat, src_mat, 255.0, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 15, 15.0)
-    val result = Bitmap.createBitmap(src?.width ?: 1080, src?.height ?: 1920, Bitmap.Config.RGB_565)
-    Utils.matToBitmap(src_mat, result, true)
-    src_mat.release()
-    return result
-}
 
 private fun findContours(src: Mat): ArrayList<MatOfPoint> {
 
@@ -93,10 +83,9 @@ private fun findContours(src: Mat): ArrayList<MatOfPoint> {
 }
 
 private fun getCorners(contours: ArrayList<MatOfPoint>, size: Size): Corners? {
-    val indexTo: Int
-    when (contours.size) {
-        in 0..5 -> indexTo = contours.size - 1
-        else -> indexTo = 4
+    val indexTo: Int = when (contours.size) {
+        in 0..5 -> contours.size - 1
+        else -> 4
     }
     for (index in 0..contours.size) {
         if (index in 0..indexTo) {
@@ -104,12 +93,11 @@ private fun getCorners(contours: ArrayList<MatOfPoint>, size: Size): Corners? {
             val peri = Imgproc.arcLength(c2f, true)
             val approx = MatOfPoint2f()
             Imgproc.approxPolyDP(c2f, approx, 0.03 * peri, true)
-            //val area = Imgproc.contourArea(approx)
             val points = approx.toArray().asList()
-            var convex = MatOfPoint()
-            approx.convertTo(convex, CvType.CV_32S);
+            val convex = MatOfPoint()
+            approx.convertTo(convex, CvType.CV_32S)
             // select biggest 4 angles polygon
-            if (points.size == 4 && Imgproc.isContourConvex(convex)){
+            if (points.size == 4 && Imgproc.isContourConvex(convex)) {
                 val foundPoints = sortPoints(points)
                 return Corners(foundPoints, size)
             }
