@@ -9,3 +9,4 @@ pubspec.lock
 build/
 example/ios/Flutter/flutter_export_environment.sh
 example/.flutter-plugins-dependencies
+ios/Pods

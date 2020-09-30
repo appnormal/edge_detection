@@ -24,6 +24,7 @@ import com.sample.edgedetection.processor.processPicture
 import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -47,6 +48,9 @@ class ScanPresenter constructor(private val context: Context, private val iView:
     private val proxySchedule: Scheduler
     private var busy: Boolean = false
     private var soundSilence :MediaPlayer = MediaPlayer()
+
+    private val disposables = CompositeDisposable()
+
     init {
         mSurfaceHolder.addCallback(this)
         executor = Executors.newSingleThreadExecutor()
@@ -160,7 +164,7 @@ class ScanPresenter constructor(private val context: Context, private val iView:
 
     override fun onPictureTaken(p0: ByteArray?, p1: Camera?) {
         Log.i(TAG, "on picture taken")
-        Observable.just(p0)
+        disposables.add(Observable.just(p0)
                 .subscribeOn(proxySchedule)
                 .subscribe {
                     val pictureSize = p1?.parameters?.pictureSize
@@ -179,7 +183,7 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                     }
                     (context as Activity)?.startActivityForResult(intent,REQUEST_CODE)
                     busy = false
-                }
+                })
     }
 
 
@@ -189,7 +193,7 @@ class ScanPresenter constructor(private val context: Context, private val iView:
         }
         Log.i(TAG, "on process start")
         busy = true
-        Observable.just(p0)
+        disposables.add(Observable.just(p0)
                 .observeOn(proxySchedule)
                 .subscribe {
                     Log.i(TAG, "start prepare paper")
@@ -228,11 +232,14 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                             }, {
                                 iView.getPaperRect().onCornersNotDetected()
                             })
-                }
+                })
 
     }
 
     private fun getMaxResolution(): Camera.Size? = mCamera?.parameters?.supportedPreviewSizes?.maxBy { it.width }
 
 
+    fun dispose() {
+        disposables.dispose()
+    }
 }

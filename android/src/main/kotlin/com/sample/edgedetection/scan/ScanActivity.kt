@@ -6,7 +6,6 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.ColorDrawable
-import android.util.Log
 import android.view.Display
 import android.view.MenuItem
 import android.view.SurfaceView
@@ -42,6 +41,7 @@ class ScanActivity : BaseActivity(), IScanView.Proxy {
 
     override fun prepare() {
         if (!OpenCVLoader.initDebug()) {
+            mPresenter.dispose()
             finish()
         }
 
@@ -72,10 +72,6 @@ class ScanActivity : BaseActivity(), IScanView.Proxy {
         mPresenter.stop()
     }
 
-    override fun exit() {
-        finish()
-    }
-
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         val cameraGranted = grantResults[permissions.indexOf(CAMERA)] == PackageManager.PERMISSION_GRANTED
 
@@ -101,6 +97,7 @@ class ScanActivity : BaseActivity(), IScanView.Proxy {
                 if (null != data && null != data.extras) {
                     val path = data.extras!!.getString(SCANNED_RESULT)
                     setResult(Activity.RESULT_OK, Intent().putExtra(SCANNED_RESULT, path))
+                    mPresenter.dispose()
                     finish()
                 }
             }
