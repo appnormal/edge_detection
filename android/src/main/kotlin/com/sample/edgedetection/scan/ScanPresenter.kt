@@ -21,11 +21,13 @@ import com.sample.edgedetection.SourceManager
 import com.sample.edgedetection.crop.CropActivity
 import com.sample.edgedetection.processor.Corners
 import com.sample.edgedetection.processor.processPicture
+import io.reactivex.BackpressureStrategy
 import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.CvType
@@ -47,9 +49,11 @@ class ScanPresenter constructor(private val context: Context, private val iView:
     private val executor: ExecutorService
     private val proxySchedule: Scheduler
     private var busy: Boolean = false
-    private var soundSilence :MediaPlayer = MediaPlayer()
+    private var soundSilence: MediaPlayer = MediaPlayer()
 
     private val disposables = CompositeDisposable()
+    private val frameProcessor: PublishSubject<Frame> = PublishSubject.create()
+    private val cornerDetector: PublishSubject<Mat> = PublishSubject.create()
 
     init {
         mSurfaceHolder.addCallback(this)
@@ -143,6 +147,8 @@ class ScanPresenter constructor(private val context: Context, private val iView:
 
         mCamera?.parameters = param
         mCamera?.setDisplayOrientation(90)
+
+        setupProcessor()
     }
 
     override fun surfaceCreated(p0: SurfaceHolder?) {
@@ -179,28 +185,28 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                     Imgproc.cvtColor(pic, pic, Imgproc.COLOR_RGB2BGRA)
                     SourceManager.pic = pic
                     val intent = Intent(context, CropActivity::class.java).apply {
-                        putExtras(bundleExtras)
+                        bundleExtras?.let { putExtras(it) }
                     }
-                    (context as Activity)?.startActivityForResult(intent,REQUEST_CODE)
+                    (context as Activity).startActivityForResult(intent, REQUEST_CODE)
                     busy = false
                 })
     }
 
+    private fun setupProcessor() {
+        Log.i(TAG, "Setup RX")
+        disposables.add(frameProcessor
+                .toFlowable(BackpressureStrategy.DROP)
+                .onBackpressureDrop()
+                .observeOn(Schedulers.io(), false, 1)
+                .subscribeOn(Schedulers.io())
+                .subscribe({
 
-    override fun onPreviewFrame(p0: ByteArray?, p1: Camera?) {
-        if (busy) {
-            return
-        }
-        Log.i(TAG, "on process start")
-        busy = true
-        disposables.add(Observable.just(p0)
-                .observeOn(proxySchedule)
-                .subscribe {
-                    Log.i(TAG, "start prepare paper")
-                    val parameters = p1?.parameters
+                    Log.i(TAG, "Process frame!")
+
+                    val parameters = it.p1.parameters
                     val width = parameters?.previewSize?.width
                     val height = parameters?.previewSize?.height
-                    val yuv = YuvImage(p0, parameters?.previewFormat ?: 0, width ?: 320, height
+                    val yuv = YuvImage(it.p0, parameters?.previewFormat ?: 0, width ?: 320, height
                             ?: 480, null)
                     val out = ByteArrayOutputStream()
                     yuv.compressToJpeg(Rect(0, 0, width ?: 320, height ?: 480), 100, out)
@@ -217,29 +223,76 @@ class ScanPresenter constructor(private val context: Context, private val iView:
                         e.printStackTrace()
                     }
 
-                    Observable.create<Corners> {
-                        val corner = processPicture(img)
-                        busy = false
-                        if (null != corner && corner.corners.size == 4) {
-                            it.onNext(corner)
-                        } else {
-                            it.onError(Throwable("paper not detected"))
+                    cornerDetector.onNext(img)
+
+                }, { throwable -> Log.e(TAG, throwable.message) }))
+
+        disposables.add(
+                cornerDetector
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribeOn(Schedulers.io())
+                        .map {
+                            Log.i(TAG, "Process image!")
+                            CornerResult(processPicture(it))
                         }
-                    }.observeOn(AndroidSchedulers.mainThread())
-                            .subscribe({
-                                iView.getPaperRect().onCornersDetected(it)
+                        .subscribe({
+                            Log.i(TAG, "Update corners!")
+                            updateCorners(it.corners)
+                        }, {
 
-                            }, {
+                            Log.w(TAG, it.message)
+
+                            (context as Activity).runOnUiThread {
                                 iView.getPaperRect().onCornersNotDetected()
-                            })
-                })
+                            }
+                        }))
+    }
 
+    override fun onPreviewFrame(p0: ByteArray?, p1: Camera?) {
+        p1?.let { camera ->
+            p0?.let { bytes -> frameProcessor.onNext(Frame(bytes, camera)) }
+        }
     }
 
     private fun getMaxResolution(): Camera.Size? = mCamera?.parameters?.supportedPreviewSizes?.maxBy { it.width }
 
 
+    private fun updateCorners(corners: Corners?) {
+        if (corners != null) {
+            iView.getPaperRect().onCornersDetected(corners)
+        } else {
+            iView.getPaperRect().onCornersNotDetected()
+        }
+    }
+
     fun dispose() {
         disposables.dispose()
+    }
+}
+
+data class CornerResult(
+        val corners: Corners?
+)
+
+data class Frame(
+        val p0: ByteArray,
+        val p1: Camera
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Frame
+
+        if (!p0.contentEquals(other.p0)) return false
+        if (p1 != other.p1) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = p0.contentHashCode()
+        result = 31 * result + p1.hashCode()
+        return result
     }
 }
